@@ -1,0 +1,10 @@
+.idea/
+target/
+lib_managed/
+src_managed/
+project/boot/
+project/plugins/project/
+.cache
+.lib/
+*.log
+.DS_Store
