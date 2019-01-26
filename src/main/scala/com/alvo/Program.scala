@@ -1,5 +1,6 @@
 package com.alvo
 
+import cats.kernel.Monoid
 import com.alvo.VirtualMachine.{Memory, Processor, Stack}
 
 trait Program {
@@ -25,10 +26,24 @@ object Program {
     }
   }
 
-  val createIndexedArgumentProgram: Int => ((Stack, Memory) => Processor) => Program = index => ƒ =>
+  implicit val programCompositionInstance: Monoid[Program] = new Monoid[Program] {
+      override def empty: Program = new Program {
+        override def getProgram: Action[VirtualMachine] = new Action[VirtualMachine] {
+          override val run: VirtualMachine => VirtualMachine = identity
+        }
+      }
+
+    override def combine(x: Program, y: Program): Program = new Program {
+      override def getProgram: Action[VirtualMachine] = new Action[VirtualMachine] {
+        override val run: VirtualMachine => VirtualMachine = y.getProgram.run compose x.getProgram.run
+      }
+    }
+  }
+
+  val createIndexedArgumentProgram: Int => ((Stack, Memory) => Processor) => Program = index => f =>
     createProgramForMemory { (stack, memory) =>
       vm =>
         if (index < 0 || index >= VirtualMachine.memorySize) VirtualMachine.error(s"index [$index] is out of bounds")(vm)
-        else ƒ(stack, memory)(vm)
+        else f(stack, memory)(vm)
     }
 }

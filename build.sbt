@@ -1,5 +1,3 @@
-import Dependencies._
-
 ThisBuild / scalaVersion     := "2.12.8"
 ThisBuild / version          := "0.1.0-SNAPSHOT"
 ThisBuild / organization     := "com.alvo"
@@ -9,7 +7,7 @@ lazy val root = (project in file("."))
   .settings(
     name := "stack-vm",
     libraryDependencies ++= Seq(
-      scalaTest % Test, 
+      "org.scalatest" %% "scalatest" % "3.0.5" % "test",
       "org.typelevel" %% "cats-core" % "1.5.0")
   )
 
