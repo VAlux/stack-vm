@@ -4,7 +4,10 @@ import cats.kernel.Semigroup
 import com.alvo.VirtualMachine._
 
 case class VirtualMachine(stack: Stack, memory: Memory, status: VMStatus) {
-  def setStack(newStack: Stack): VirtualMachine = this.copy(stack = newStack)
+  def setStack(newStack: Stack): VirtualMachine = {
+    println(s"stack: ${newStack mkString " | "}")
+    this.copy(stack = newStack)
+  }
 
   def setMemory(newMemory: Memory): VirtualMachine = this.copy(memory = newMemory)
 
@@ -45,7 +48,7 @@ object VirtualMachine {
 
   val push: Int => Program = element => Program.createProgramForStack { stack =>
     vm =>
-      vm.setStack(stack :+ element)
+      vm.setStack(element :: stack)
   }
 
   val dup: Program = Program.createProgramForStack { stack =>
@@ -104,14 +107,14 @@ object VirtualMachine {
   val inc: Program = unary("inc", a => (a + 1) :: Nil)
   val dec: Program = unary("dec", a => (a - 1) :: Nil)
   val add: Program = binary("add", a => b => (a + b) :: Nil)
-  val sub: Program = binary("sub", a => b => (a - b) :: Nil)
+  val sub: Program = binary("sub", a => b => (b - a) :: Nil)
   val mul: Program = binary("mul", a => b => (a * b) :: Nil)
-  val div: Program = binary("div", a => b => (a / b) :: Nil)
-  val eq: Program = binary("eq", a => b => if (a == b) 1 :: Nil else -1 :: Nil)
-  val lt: Program = binary("lt", a => b => if (a < b) 1 :: Nil else -1 :: Nil)
-  val gt: Program = binary("gt", a => b => if (a > b) 1 :: Nil else -1 :: Nil)
-  val neq: Program = binary("neq", a => b => if (a != b) 1 :: Nil else -1 :: Nil)
-  val mod: Program = binary("mod", a => b => (a % b) :: Nil)
+  val div: Program = binary("div", a => b => (b / a) :: Nil)
+  val eqv: Program = binary("eq", a => b => if (a == b) 1 :: Nil else 0 :: Nil)
+  val lte: Program = binary("lt", a => b => if (a > b) 1 :: Nil else 0 :: Nil)
+  val gte: Program = binary("gt", a => b => if (a < b) 1 :: Nil else 0 :: Nil)
+  val neq: Program = binary("neq", a => b => if (a != b) 1 :: Nil else 0 :: Nil)
+  val mod: Program = binary("mod", a => b => (b % a) :: Nil)
 
   val proceed: Program => Stack => Processor =
     program => stack => program.getProgram.run compose { vm => vm.setStack(stack) }
@@ -125,16 +128,6 @@ object VirtualMachine {
         }
     }
 
-  //  val loop: Program => Program => Program =
-  //    testExpr => body => Program.createProgramForStack { stack =>
-  //      vm => {
-  //        lazy val res: VirtualMachine = proceed(testExpr)(vm.stack)(vm)
-  //        stack match {
-  //          ???
-  //        }
-  //      }
-  //    }
-
   val rep: Program => Program = body => Program.createProgramForStack { stack =>
     vm =>
       stack match {
@@ -146,7 +139,7 @@ object VirtualMachine {
 
   implicit class VirtualMachineSyntax(vm: VirtualMachine) {
     def mkString: String =
-      s"stack: ${vm.stack} | memory: ${vm.memory mkString " "} | status: ${vm.status}"
+      s"stack: ${vm.stack mkString " - "} || memory: ${vm.memory mkString " "} || status: ${vm.status}"
   }
 
 }
@@ -156,13 +149,33 @@ object Bootstrap {
   import VirtualMachine.VirtualMachineSyntax
   import cats.syntax.monoid._
 
-  val fact: Program = dup |+| push(2) |+| lt |+|
+  /**
+    * example for "range from 2 to 6"
+    *
+    * stack: 2 -- push 2
+    * stack: 6 | 2 --  push 6
+    * stack: 2 | 6 | 2 --  exch
+    * stack: 4 | 2 -- sub
+    * stack: 2 --  rep (4 times)
+    * stack: 2 | 2 -- dup
+    * stack: 3 | 2 -- inc
+    * stack: 3 | 3 | 2 -- dup
+    * stack: 4 | 3 | 2 -- inc
+    * stack: 4 | 4 | 3 | 2 -- dup
+    * stack: 5 | 4 | 3 | 2 -- inc
+    * stack: 5 | 5 | 4 | 3 | 2 -- dup
+    * stack: 6 | 5 | 4 | 3 | 2 -- inc
+    */
+  val range: Program = exch |+| sub |+| rep(dup |+| inc)
+
+  val fact: Program = dup |+| push(2) |+| lte |+|
     branch(push(1))(dup |+| dec |+| fact) |+|
     mul
 
   def main(args: Array[String]): Unit = {
-    val res: VirtualMachine = execute(push(10) |+| fact)
-    println(res mkString)
+    val resFact: VirtualMachine = execute(push(6) |+| fact)
+    val resRange: VirtualMachine = execute(push(2) |+| push(6) |+| range)
+    println(resFact mkString)
   }
 }
 
