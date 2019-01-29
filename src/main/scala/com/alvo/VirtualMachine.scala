@@ -3,6 +3,8 @@ package com.alvo
 import cats.kernel.Semigroup
 import com.alvo.VirtualMachine._
 
+import scala.annotation.tailrec
+
 case class VirtualMachine(stack: Stack, memory: Memory, status: VMStatus) {
   def setStack(newStack: Stack): VirtualMachine = {
     println(s"stack: ${newStack mkString " | "}")
@@ -136,6 +138,22 @@ object VirtualMachine {
       }
   }
 
+  val loop: Program => Program => Program = test => body => Program.createProgramForStack { _ =>
+    vm => {
+      @tailrec
+      def iterate(machine: VirtualMachine): VirtualMachine = {
+        val res = proceed(test)(machine.stack)(machine)
+        res.stack match {
+          case 0 :: xs => proceed(Program.id)(xs)(machine)
+          case _ :: xs => iterate(proceed(body)(xs)(machine))
+          case _ => error("while operation required an argument")(machine)
+        }
+      }
+
+      iterate(vm)
+    }
+  }
+
 
   implicit class VirtualMachineSyntax(vm: VirtualMachine) {
     def mkString: String =
@@ -149,33 +167,31 @@ object Bootstrap {
   import VirtualMachine.VirtualMachineSyntax
   import cats.syntax.monoid._
 
-  /**
-    * example for "range from 2 to 6"
-    *
-    * stack: 2 -- push 2
-    * stack: 6 | 2 --  push 6
-    * stack: 2 | 6 | 2 --  exch
-    * stack: 4 | 2 -- sub
-    * stack: 2 --  rep (4 times)
-    * stack: 2 | 2 -- dup
-    * stack: 3 | 2 -- inc
-    * stack: 3 | 3 | 2 -- dup
-    * stack: 4 | 3 | 2 -- inc
-    * stack: 4 | 4 | 3 | 2 -- dup
-    * stack: 5 | 4 | 3 | 2 -- inc
-    * stack: 5 | 5 | 4 | 3 | 2 -- dup
-    * stack: 6 | 5 | 4 | 3 | 2 -- inc
-    */
-  val range: Program = exch |+| sub |+| rep(dup |+| inc)
+  val range: Program =
+    exch |+| sub |+| rep(dup |+| inc)
 
-  val fact: Program = dup |+| push(2) |+| lte |+|
-    branch(push(1))(dup |+| dec |+| fact) |+|
-    mul
+  //TODO: recursion is not supported yet
+  def recursiveFact: Program =
+    dup |+| push(2) |+| lte |+| branch(push(1))(dup |+| dec |+| recursiveFact) |+| mul
+
+  val memFactIter: Program =
+    dup |+| put(0) |+| dup |+| dec |+| rep(dec |+| dup |+| get(0) |+| mul |+| put(0)) |+| get(0) |+| swap |+| pop
+
+  val copy: Program =
+    exch |+| exch
+
+  val gcd: Program =
+    loop(copy |+| neq)(copy |+| lte |+| branch(Program.id)(swap) |+| exch |+| sub) |+| pop
+
 
   def main(args: Array[String]): Unit = {
-    val resFact: VirtualMachine = execute(push(6) |+| fact)
+    println("VM Bootstrapped. Beginning evaluation...")
+    val resFact: VirtualMachine = execute(push(6) |+| recursiveFact)
     val resRange: VirtualMachine = execute(push(2) |+| push(6) |+| range)
-    println(resFact mkString)
+    val resGcd = execute(push(6) |+| push(9) |+| gcd)
+    val resFactMemIter = execute(push(6) |+| memFactIter)
+    println(resFactMemIter mkString)
+    println("Evaluation finished. VM terminated")
   }
 }
 
