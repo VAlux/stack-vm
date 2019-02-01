@@ -3,52 +3,63 @@ package com.alvo
 import cats.kernel.Monoid
 import com.alvo.VirtualMachine.{Memory, Processor, Stack}
 
-trait Program {
-  def getProgram: Action[VirtualMachine]
+trait Program[A] {
+  def getProgram: Action[VirtualMachine[A]]
 }
 
 object Program {
 
-  val id: Program = new Program {
-    override def getProgram: Action[VirtualMachine] = new Action[VirtualMachine] {
-      override def run: VirtualMachine => VirtualMachine = identity
+  def id[A]: Program[A] = new Program[A] {
+    override def getProgram: Action[VirtualMachine[A]] = new Action[VirtualMachine[A]] {
+      override val run: VirtualMachine[A] => VirtualMachine[A] = identity
     }
   }
 
-  val createProgramForStack: (Stack => Processor) => Program = func => new Program {
-    override def getProgram: Action[VirtualMachine] = new Action[VirtualMachine] {
-      override val run: VirtualMachine => VirtualMachine = vm => vm.status match {
-        case Some(_) => vm
-        case _ => func(vm.stack)(vm) // Status is empty -> we can continue
+  def createProgramForStack[A]: (Stack => Processor[A]) => Program[A] => Program[A] =
+    func => program => new Program[A] {
+      override def getProgram: Action[VirtualMachine[A]] = new Action[VirtualMachine[A]] {
+        override val run: VirtualMachine[A] => VirtualMachine[A] = vm => vm.status match {
+          case Some(_) => vm
+          case _ => (program.getProgram.run compose func(vm.stack)) (vm) // Status is empty -> we can continue
+        }
+      }
+    }
+
+  def createProgramForMemory[A]: ((Stack, Memory) => Processor[A]) => Program[A] => Program[A] =
+    func => program => new Program[A] {
+      override def getProgram: Action[VirtualMachine[A]] = new Action[VirtualMachine[A]] {
+        override val run: VirtualMachine[A] => VirtualMachine[A] = vm => vm.status match {
+          case Some(_) => vm
+          case _ => (program.getProgram.run compose func(vm.stack, vm.memory)) (vm) // Status is empty -> we can continue
+        }
+      }
+    }
+
+  implicit def programCompositionInstance[A]: Monoid[Program[A] => Program[A]] = new Monoid[Program[A] => Program[A]] {
+    override def empty: Program[A] => Program[A] = id[A]()
+
+    override def combine(x: Program[A] => Program[A], y: Program[A] => Program[A]): Program[A] => Program[A] = {
+      y compose x
+    }
+  }
+
+  implicit def programCompositionInstance[A]: Monoid[Program[A]] = new Monoid[Program[A]] {
+    override def empty: Program[A] = id
+
+    override def combine(x: Program[A], y: Program[A]): Program[A] = new Program[A] {
+      override def getProgram: Action[VirtualMachine[A]] = new Action[VirtualMachine[A]] {
+        override val run: VirtualMachine[A] => VirtualMachine[A] = y.getProgram.run compose x.getProgram.run
       }
     }
   }
 
-  val createProgramForMemory: ((Stack, Memory) => Processor) => Program = func => new Program {
-    override def getProgram: Action[VirtualMachine] = new Action[VirtualMachine] {
-      override val run: VirtualMachine => VirtualMachine = vm => vm.status match {
-        case Some(_) => vm
-        case _ => func(vm.stack, vm.memory)(vm) // Status is empty -> we can continue
+  def createIndexedArgumentProgram[A]: Int => ((Stack, Memory) => Processor[A]) => Program[A] => Program[A] =
+    index => func =>
+      createProgramForMemory[A] { (stack, memory) =>
+        vm =>
+          if (index < 0 || index >= VirtualMachine.memorySize)
+            VirtualMachine.error(s"index [$index] is out of bounds")(vm)
+          else
+            func(stack, memory)(vm)
       }
-    }
-  }
-
-  implicit val programCompositionInstance: Monoid[Program] = new Monoid[Program] {
-    override def empty: Program = id
-
-    override def combine(x: Program, y: Program): Program = new Program {
-      override def getProgram: Action[VirtualMachine] = new Action[VirtualMachine] {
-        override def run: VirtualMachine => VirtualMachine = y.getProgram.run compose x.getProgram.run
-      }
-    }
-  }
-
-  val createIndexedArgumentProgram: Int => ((Stack, Memory) => Processor) => Program = index => func =>
-    createProgramForMemory { (stack, memory) =>
-      vm =>
-        if (index < 0 || index >= VirtualMachine.memorySize)
-          VirtualMachine.error(s"index [$index] is out of bounds")(vm)
-        else
-          func(stack, memory)(vm)
-    }
 }

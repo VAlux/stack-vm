@@ -1,38 +1,40 @@
 package com.alvo
 
-import cats.kernel.Semigroup
+import cats.kernel.{Monoid, Semigroup}
+import cats.syntax.monoid._
 import com.alvo.VirtualMachine._
 
 import scala.annotation.tailrec
 
-case class VirtualMachine(stack: Stack, memory: Memory, status: VMStatus) {
-  def setStack(newStack: Stack): VirtualMachine = {
-    println(s"stack: ${newStack mkString " | "}")
-    this.copy(stack = newStack)
-  }
+final case class VirtualMachine[A: Monoid](stack: Stack, memory: Memory, status: VMStatus, journal: A) {
+  def setStack(newStack: Stack): VirtualMachine[A] = this.copy(stack = newStack)
 
-  def setMemory(newMemory: Memory): VirtualMachine = this.copy(memory = newMemory)
+  def setMemory(newMemory: Memory): VirtualMachine[A] = this.copy(memory = newMemory)
 
-  def setStatus(newStatus: VMStatus): VirtualMachine = this.copy(status = newStatus)
+  def setStatus(newStatus: VMStatus): VirtualMachine[A] = this.copy(status = newStatus)
+
+  def addRecord(record: A): VirtualMachine[A] = this.copy(journal = journal |+| record)
 }
 
 object VirtualMachine {
 
   type Stack = List[Int]
   type Memory = Array[Int]
-  type Processor = VirtualMachine => VirtualMachine
+  type Processor[A] = VirtualMachine[A] => VirtualMachine[A]
   type VMStatus = Option[String]
+  type Operation[A] = Program[A] => Program[A]
 
   val memorySize = 4
 
-  val empty: VirtualMachine = VirtualMachine(List.empty, Array.fill(memorySize)(0), None)
+  def emptyVM[A: Monoid]: VirtualMachine[A] =
+    VirtualMachine[A](List.empty, Array.fill(memorySize)(0), None, Monoid.empty[A])
 
-  val run: Program => Processor = _.getProgram.run
+  def run[A]: Program[A] => Processor[A] = _.getProgram.run
 
-  val execute: Program => VirtualMachine = program => run(program)(empty)
+  def execute[A: Monoid](program: Program[A]): VirtualMachine[A] = run(program)(emptyVM[A])
 
-  val error: String => Processor = message => {
-    vm: VirtualMachine => vm.setStatus(Some(s"Error: $message"))
+  def error[A]: String => Processor[A] = message => {
+    vm: VirtualMachine[A] => vm.setStatus(Some(s"Error: $message"))
   }
 
   private def updateMemory(memory: Memory, at: Int, value: Int): Memory = {
@@ -40,7 +42,7 @@ object VirtualMachine {
     memory
   }
 
-  val pop: Program = Program.createProgramForStack { stack =>
+  def pop[A]: Program[A] => Program[A] = Program.createProgramForStack[A] { stack =>
     vm =>
       stack match {
         case _ :: xs => vm.setStack(xs)
@@ -48,12 +50,12 @@ object VirtualMachine {
       }
   }
 
-  val push: Int => Program = element => Program.createProgramForStack { stack =>
+  def push[A]: Int => Program[A] => Program[A] = element => Program.createProgramForStack[A] { stack =>
     vm =>
       vm.setStack(element :: stack)
   }
 
-  val dup: Program = Program.createProgramForStack { stack =>
+  def dup[A]: Program[A] => Program[A] = Program.createProgramForStack[A] { stack =>
     vm =>
       stack match {
         case x :: xs => vm.setStack(x :: x :: xs)
@@ -61,7 +63,7 @@ object VirtualMachine {
       }
   }
 
-  val swap: Program = Program.createProgramForStack { stack =>
+  def swap[A]: Program[A] => Program[A] = Program.createProgramForStack[A] { stack =>
     vm =>
       stack match {
         case x :: y :: xs => vm.setStack(y :: x :: xs)
@@ -69,7 +71,7 @@ object VirtualMachine {
       }
   }
 
-  val exch: Program = Program.createProgramForStack { stack =>
+  def exch[A]: Program[A] => Program[A] = Program.createProgramForStack[A] { stack =>
     vm =>
       stack match {
         case x :: y :: xs => vm.setStack(y :: x :: y :: xs)
@@ -77,7 +79,7 @@ object VirtualMachine {
       }
   }
 
-  val put: Int => Program = index => Program.createIndexedArgumentProgram(index) { (stack, memory) =>
+  def put[A]: Int => Program[A] => Program[A] = index => Program.createIndexedArgumentProgram[A](index) { (stack, memory) =>
     vm =>
       stack match {
         case x :: xs => vm.setStack(xs).setMemory(updateMemory(memory, index, x))
@@ -85,11 +87,12 @@ object VirtualMachine {
       }
   }
 
-  val get: Int => Program = index => Program.createIndexedArgumentProgram(index) { (stack, memory) =>
-    vm => vm.setStack(memory(index) :: stack)
-  }
+  def get[A]: Int => Program[A] => Program[A] = index =>
+    Program.createIndexedArgumentProgram[A](index) { (stack, memory) =>
+      vm => vm.setStack(memory(index) :: stack)
+    }
 
-  val unary: (String, Int => Stack) => Program = (name, operation) => Program.createProgramForStack { stack =>
+  def unary[A]: (String, Int => Stack) => Program[A] => Program[A] = (name, operation) => Program.createProgramForStack[A] { stack =>
     vm =>
       stack match {
         case x :: xs => vm.setStack(operation(x) ++ xs)
@@ -97,65 +100,78 @@ object VirtualMachine {
       }
   }
 
-  val binary: (String, Int => Int => Stack) => Program = (name, operation) => Program.createProgramForStack { stack =>
-    vm =>
-      stack match {
-        case x :: y :: xs => vm.setStack(operation(x)(y) ++ xs)
-        case _ => error(s"operation $name expected 2 arguments")(vm)
-      }
-  }
-
-  val neg: Program = unary("neg", a => -a :: Nil)
-  val inc: Program = unary("inc", a => (a + 1) :: Nil)
-  val dec: Program = unary("dec", a => (a - 1) :: Nil)
-  val add: Program = binary("add", a => b => (a + b) :: Nil)
-  val sub: Program = binary("sub", a => b => (b - a) :: Nil)
-  val mul: Program = binary("mul", a => b => (a * b) :: Nil)
-  val div: Program = binary("div", a => b => (b / a) :: Nil)
-  val eqv: Program = binary("eq", a => b => if (a == b) 1 :: Nil else 0 :: Nil)
-  val lte: Program = binary("lt", a => b => if (a > b) 1 :: Nil else 0 :: Nil)
-  val gte: Program = binary("gt", a => b => if (a < b) 1 :: Nil else 0 :: Nil)
-  val neq: Program = binary("neq", a => b => if (a != b) 1 :: Nil else 0 :: Nil)
-  val mod: Program = binary("mod", a => b => (b % a) :: Nil)
-
-  val proceed: Program => Stack => Processor =
-    program => stack => program.getProgram.run compose { vm => vm.setStack(stack) }
-
-  val branch: Program => Program => Program =
-    branch1 => branch2 => Program.createProgramForStack { stack =>
+  def binary[A]: (String, Int => Int => Stack) => Program[A] => Program[A] = (name, operation) =>
+    Program.createProgramForStack[A] { stack =>
       vm =>
         stack match {
-          case x :: xs => proceed(if (x != 0) branch1 else branch2)(xs)(vm)
+          case x :: y :: xs => vm.setStack(operation(x)(y) ++ xs)
+          case _ => error(s"operation $name expected 2 arguments")(vm)
+        }
+    }
+
+  def neg[A]: Program[A] => Program[A] = unary[A]("neg", a => -a :: Nil)
+
+  def inc[A]: Program[A] => Program[A] = unary[A]("inc", a => (a + 1) :: Nil)
+
+  def dec[A]: Program[A] => Program[A] = unary[A]("dec", a => (a - 1) :: Nil)
+
+  def add[A]: Program[A] => Program[A] = binary[A]("add", a => b => (a + b) :: Nil)
+
+  def sub[A]: Program[A] => Program[A] = binary[A]("sub", a => b => (b - a) :: Nil)
+
+  def mul[A]: Program[A] => Program[A] = binary[A]("mul", a => b => (a * b) :: Nil)
+
+  def div[A]: Program[A] => Program[A] = binary[A]("div", a => b => (b / a) :: Nil)
+
+  def eqv[A]: Program[A] => Program[A] = binary[A]("eq", a => b => if (a == b) 1 :: Nil else 0 :: Nil)
+
+  def lte[A]: Program[A] => Program[A] = binary[A]("lt", a => b => if (a > b) 1 :: Nil else 0 :: Nil)
+
+  def gte[A]: Program[A] => Program[A] = binary[A]("gt", a => b => if (a < b) 1 :: Nil else 0 :: Nil)
+
+  def neq[A]: Program[A] => Program[A] = binary[A]("neq", a => b => if (a != b) 1 :: Nil else 0 :: Nil)
+
+  def mod[A]: Program[A] => Program[A] = binary[A]("mod", a => b => (b % a) :: Nil)
+
+  def proceed[A]: Program[A] => Program[A] => Stack => Processor[A] =
+    pr => program => stack => (pr.getProgram.run compose program.getProgram.run) compose { vm => vm.setStack(stack) }
+
+  def branch[A]: Program[A] => Program[A] => Program[A] => Program[A] => Program[A] =
+    branch1 => branch2 => program => Program.createProgramForStack[A] { stack =>
+      vm =>
+        stack match {
+          case x :: xs => proceed(if (x != 0) branch1 else branch2)(program)(xs)(vm)
           case _ => error("branch requires an argument")(vm)
         }
     }
 
-  val rep: Program => Program = body => Program.createProgramForStack { stack =>
-    vm =>
-      stack match {
-        case x :: xs => proceed(Semigroup[Program].combineN(body, x))(xs)(vm)
-        case _ => error("rep operation required an argument")(vm)
-      }
-  }
-
-  val loop: Program => Program => Program = test => body => Program.createProgramForStack { _ =>
-    vm => {
-      @tailrec
-      def iterate(machine: VirtualMachine): VirtualMachine = {
-        val res = proceed(test)(machine.stack)(machine)
-        res.stack match {
-          case 0 :: xs => proceed(Program.id)(xs)(machine)
-          case _ :: xs => iterate(proceed(body)(xs)(machine))
-          case _ => error("while operation required an argument")(machine)
+  def rep[A]: Operation[A] => Operation[A] = body => program =>
+    Program.createProgramForStack[A] { stack =>
+      vm =>
+        stack match {
+          case x :: xs => proceed[A](Semigroup[Program[A]].combineN(body, x))(program)(xs)(vm)
+          case _ => error("rep operation required an argument")(vm)
         }
-      }
-
-      iterate(vm)
     }
-  }
 
+  def loop[A]: Program[A] => Program[A] => Program[A] => Program[A] => Program[A] = test => body => program =>
+    Program.createProgramForStack[A] { _ =>
+      vm => {
+        @tailrec
+        def iterate(machine: VirtualMachine[A]): VirtualMachine[A] = {
+          val testResult = proceed(test)(program)(machine.stack)(machine)
+          testResult.stack match {
+            case 0 :: xs => proceed[A](Program.id)(program)(xs)(machine)
+            case _ :: xs => iterate(proceed[A](body)(program)(xs)(machine))
+            case _ => error("while operation required an argument")(machine)
+          }
+        }
 
-  implicit class VirtualMachineSyntax(vm: VirtualMachine) {
+        iterate(vm)
+      }
+    }
+
+  implicit class VirtualMachineSyntax(val vm: VirtualMachine[_]) extends AnyVal {
     def mkString: String =
       s"stack: ${vm.stack mkString " - "} || memory: ${vm.memory mkString " "} || status: ${vm.status}"
   }
@@ -164,33 +180,28 @@ object VirtualMachine {
 
 object Bootstrap {
 
-  import VirtualMachine.VirtualMachineSyntax
-  import cats.syntax.monoid._
-
-  val range: Program =
-    exch |+| sub |+| rep(dup |+| inc)
+  def range[A]: Operation[A] =
+    exch[A] |+| sub[A] |+| rep[A](dup[A] |+| inc[A])
 
   //TODO: recursion is not supported yet
-  def recursiveFact: Program =
-    dup |+| push(2) |+| lte |+| branch(push(1))(dup |+| dec |+| recursiveFact) |+| mul
-
-  val memFactIter: Program =
-    dup |+| put(0) |+| dup |+| dec |+| rep(dec |+| dup |+| get(0) |+| mul |+| put(0)) |+| get(0) |+| swap |+| pop
-
-  val copy: Program =
-    exch |+| exch
-
-  val gcd: Program =
-    loop(copy |+| neq)(copy |+| lte |+| branch(Program.id)(swap) |+| exch |+| sub) |+| pop
+  //  def recursiveFact: Program =
+  //    dup |+| push(2) |+| lte |+| branch(push(1))(dup |+| dec |+| recursiveFact) |+| mul
+  //
+  //  val memFactIter: Program =
+  //    dup |+| put(0) |+| dup |+| dec |+| rep(dec |+| dup |+| get(0) |+| mul |+| put(0)) |+| get(0) |+| swap |+| pop
+  //
+    def copy[A]: Operation[A] = exch[A] |+| exch[A]
+  //
+//    def gcd[A]: Program[A] => Program[A]=
+//      loop[A](copy[A] |+| neq[A])(copy |+| lte |+| branch(Program.id)(swap) |+| exch |+| sub) |+| pop
 
 
   def main(args: Array[String]): Unit = {
-    println("VM Bootstrapped. Beginning evaluation...")
-    val resFact: VirtualMachine = execute(push(6) |+| recursiveFact)
-    val resRange: VirtualMachine = execute(push(2) |+| push(6) |+| range)
-    val resGcd = execute(push(6) |+| push(9) |+| gcd)
-    val resFactMemIter = execute(push(6) |+| memFactIter)
-    println(resFactMemIter mkString)
+    def resRange[A]= execute[A](push[A](2) |+| push[A](6) |+| range[A])()
+
+    //    val resGcd = execute(push(6) |+| push(9) |+| gcd)
+    //    val resFactMemIter = execute(push(6) |+| memFactIter)
+    println(resRange mkString)
     println("Evaluation finished. VM terminated")
   }
 }

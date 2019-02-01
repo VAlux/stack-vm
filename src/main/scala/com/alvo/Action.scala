@@ -3,7 +3,7 @@ package com.alvo
 import cats.kernel.Monoid
 
 trait Action[A] {
-  def run: A => A
+  val run: A => A
 }
 
 object Action {
