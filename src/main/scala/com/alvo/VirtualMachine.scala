@@ -4,6 +4,7 @@ import cats.kernel.Semigroup
 import com.alvo.VirtualMachine._
 
 import scala.annotation.tailrec
+import scala.language.implicitConversions
 
 case class VirtualMachine(stack: Stack, memory: Memory, status: VMStatus) {
   def setStack(newStack: Stack): VirtualMachine = {
@@ -25,11 +26,11 @@ object VirtualMachine {
 
   val memorySize = 4
 
-  val empty: VirtualMachine = VirtualMachine(List.empty, Array.fill(memorySize)(0), None)
+  val emptyVM: VirtualMachine = VirtualMachine(List.empty, Array.fill(memorySize)(0), None)
 
   val run: Program => Processor = _.getProgram.run
 
-  val execute: Program => VirtualMachine = program => run(program)(empty)
+  val execute: Program => VirtualMachine = program => run(program)(emptyVM)
 
   val error: String => Processor = message => {
     vm: VirtualMachine => vm.setStatus(Some(s"Error: $message"))
@@ -105,18 +106,20 @@ object VirtualMachine {
       }
   }
 
-  val neg: Program = unary("neg", a => -a :: Nil)
-  val inc: Program = unary("inc", a => (a + 1) :: Nil)
-  val dec: Program = unary("dec", a => (a - 1) :: Nil)
-  val add: Program = binary("add", a => b => (a + b) :: Nil)
-  val sub: Program = binary("sub", a => b => (b - a) :: Nil)
-  val mul: Program = binary("mul", a => b => (a * b) :: Nil)
-  val div: Program = binary("div", a => b => (b / a) :: Nil)
-  val eqv: Program = binary("eq", a => b => if (a == b) 1 :: Nil else 0 :: Nil)
-  val lte: Program = binary("lt", a => b => if (a > b) 1 :: Nil else 0 :: Nil)
-  val gte: Program = binary("gt", a => b => if (a < b) 1 :: Nil else 0 :: Nil)
-  val neq: Program = binary("neq", a => b => if (a != b) 1 :: Nil else 0 :: Nil)
-  val mod: Program = binary("mod", a => b => (b % a) :: Nil)
+  private[this] implicit def intToStack(number: Int): Stack = number :: Nil
+
+  val neg: Program = unary("neg", a => -a)
+  val inc: Program = unary("inc", a => a + 1)
+  val dec: Program = unary("dec", a => a - 1)
+  val add: Program = binary("add", a => b => a + b)
+  val sub: Program = binary("sub", a => b => b - a)
+  val mul: Program = binary("mul", a => b => a * b)
+  val div: Program = binary("div", a => b => b / a)
+  val eqv: Program = binary("eq", a => b => if (a == b) 1 else 0)
+  val lte: Program = binary("lt", a => b => if (a > b) 1 else 0)
+  val gte: Program = binary("gt", a => b => if (a < b) 1 else 0)
+  val neq: Program = binary("neq", a => b => if (a != b) 1 else 0)
+  val mod: Program = binary("mod", a => b => b % a)
 
   val proceed: Program => Stack => Processor =
     program => stack => program.getProgram.run compose { vm => vm.setStack(stack) }
@@ -171,8 +174,8 @@ object Bootstrap {
     exch |+| sub |+| rep(dup |+| inc)
 
   //TODO: recursion is not supported yet
-  def recursiveFact: Program =
-    dup |+| push(2) |+| lte |+| branch(push(1))(dup |+| dec |+| recursiveFact) |+| mul
+//  def recursiveFact: Program =
+//    dup |+| push(2) |+| lte |+| branch(push(1))(dup |+| dec |+| recursiveFact) |+| mul
 
   val memFactIter: Program =
     dup |+| put(0) |+| dup |+| dec |+| rep(dec |+| dup |+| get(0) |+| mul |+| put(0)) |+| get(0) |+| swap |+| pop
@@ -186,10 +189,11 @@ object Bootstrap {
 
   def main(args: Array[String]): Unit = {
     println("VM Bootstrapped. Beginning evaluation...")
-    val resFact: VirtualMachine = execute(push(6) |+| recursiveFact)
-    val resRange: VirtualMachine = execute(push(2) |+| push(6) |+| range)
-    val resGcd = execute(push(6) |+| push(9) |+| gcd)
-    val resFactMemIter = execute(push(6) |+| memFactIter)
+
+    def resRange: VirtualMachine = execute(push(2) |+| push(6) |+| range)
+    def resGcd = execute(push(6) |+| push(9) |+| gcd)
+    def resFactMemIter = execute(push(6) |+| memFactIter)
+
     println(resFactMemIter mkString)
     println("Evaluation finished. VM terminated")
   }
