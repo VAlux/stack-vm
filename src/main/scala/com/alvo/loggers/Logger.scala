@@ -15,7 +15,6 @@ object Logger {
   type StepsAmountLog = Int
 
   implicit def loggerOperationProvider[A: Logger]: VirtualMachine[A] => A = implicitly[Logger[A]].logOperation
-
   implicit val memoryStateLogger: MemoryStateLogger = new MemoryStateLogger
   implicit val computationStepsAmountLogger: ComputationStepsAmountLogger = new ComputationStepsAmountLogger
   implicit val stackStateLogger: StackStateLogger = new StackStateLogger

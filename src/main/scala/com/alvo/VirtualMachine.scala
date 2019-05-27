@@ -2,7 +2,7 @@ package com.alvo
 
 import cats.kernel.Monoid
 import cats.syntax.monoid._
-import com.alvo.Program.id
+import com.alvo.Program.{id, idF}
 import com.alvo.VirtualMachine._
 import com.alvo.code.Hom.fromCode
 import com.alvo.code.Terms._
