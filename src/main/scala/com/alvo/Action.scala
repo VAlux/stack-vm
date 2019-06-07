@@ -7,8 +7,7 @@ trait Action[A] {
 }
 
 object Action {
-  // TODO: Not used for now. Consider remove it later...
-  implicit def actionCompositionInstance[A]: Monoid[Action[A]] = new Monoid[Action[A]] {
+  implicit def actionCompositionInstance[A: Monoid]: Monoid[Action[A]] = new Monoid[Action[A]] {
     override def empty: Action[A] = new Action[A] {
       override val run: A => A = identity
     }

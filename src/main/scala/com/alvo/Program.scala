@@ -1,54 +1,70 @@
 package com.alvo
 
 import cats.kernel.Monoid
-import com.alvo.VirtualMachine.{Memory, Processor, Stack}
+import com.alvo.VirtualMachine.{Memory, Processor, ProgramF, Stack}
+import com.alvo.code.Term
+import com.alvo.code.Terms.{NOP, TermList}
 
-trait Program {
-  def getProgram: Action[VirtualMachine]
+
+trait Program[A] {
+  def getProgram: TermAction[A]
 }
+
+case class TermAction[A](action: Action[VirtualMachine[A]], termList: TermList = NOP)
 
 object Program {
 
-  val id: Program = new Program {
-    override def getProgram: Action[VirtualMachine] = new Action[VirtualMachine] {
-      override def run: VirtualMachine => VirtualMachine = identity
-    }
+  type VirtualMachineF[A] = VirtualMachine[A] => VirtualMachine[A]
+
+  type ProcessorF[A] = (Stack, Memory) => Processor[A]
+
+  def id[A: Monoid]: Program[A] = new Program[A] {
+    override def getProgram: TermAction[A] = TermAction(new Action[VirtualMachine[A]] {
+      override def run: VirtualMachineF[A] = identity
+    })
   }
 
-  val createProgramForStack: (Stack => Processor) => Program = func => new Program {
-    override def getProgram: Action[VirtualMachine] = new Action[VirtualMachine] {
-      override val run: VirtualMachine => VirtualMachine = vm => vm.status match {
+  def idF[A: Monoid]: ProgramF[A] = _ => Program.id
+
+  def createProgramForStack[A: Monoid](terms: TermList)(program: Stack => Processor[A]): ProgramF[A] = context => new Program[A] {
+    override def getProgram: TermAction[A] = TermAction(new Action[VirtualMachine[A]] {
+      override val run: VirtualMachineF[A] = vm => vm.status match {
         case Some(_) => vm
-        case _ => func(vm.stack)(vm) // Status is empty -> we can continue
+        case _ => (context.getProgram.action.run compose program(vm.stack)) (vm) // Status is empty -> we can continue
       }
-    }
+    }, terms)
   }
 
-  val createProgramForMemory: ((Stack, Memory) => Processor) => Program = func => new Program {
-    override def getProgram: Action[VirtualMachine] = new Action[VirtualMachine] {
-      override val run: VirtualMachine => VirtualMachine = vm => vm.status match {
+  def createProgramForMemory[A: Monoid](terms: TermList)(program: ProcessorF[A]): ProgramF[A] = context => new Program[A] {
+    override def getProgram: TermAction[A] = TermAction(new Action[VirtualMachine[A]] {
+      override val run: VirtualMachineF[A] = vm => vm.status match {
         case Some(_) => vm
-        case _ => func(vm.stack, vm.memory)(vm) // Status is empty -> we can continue
+        case _ => (context.getProgram.action.run compose program(vm.stack, vm.memory)) (vm) // Status is empty -> we can continue
       }
-    }
+    }, terms)
   }
 
-  implicit val programCompositionInstance: Monoid[Program] = new Monoid[Program] {
-    override def empty: Program = id
-
-    override def combine(x: Program, y: Program): Program = new Program {
-      override def getProgram: Action[VirtualMachine] = new Action[VirtualMachine] {
-        override def run: VirtualMachine => VirtualMachine = y.getProgram.run compose x.getProgram.run
-      }
-    }
-  }
-
-  val createIndexedArgumentProgram: Int => ((Stack, Memory) => Processor) => Program = index => func =>
-    createProgramForMemory { (stack, memory) =>
-      vm =>
+  def createIndexedProgram[A: Monoid](terms: TermList)(index: Int): ProcessorF[A] => ProgramF[A] = program => context => new Program[A] {
+    override def getProgram: TermAction[A] = TermAction(new Action[VirtualMachine[A]] {
+      override val run: VirtualMachineF[A] = vm => {
         if (index < 0 || index >= VirtualMachine.memorySize)
-          VirtualMachine.error(s"index [$index] is out of bounds")(vm)
-        else
-          func(stack, memory)(vm)
+          VirtualMachine.error[A](s"index [$index] is out of bounds").apply(vm)
+        else vm.status match {
+          case Some(_) => vm
+          case _ => (context.getProgram.action.run compose program(vm.stack, vm.memory)) (vm) // Status is empty -> we can continue
+        }
+      }
+    }, terms)
+  }
+
+  implicit def programCompositionInstance[A: Monoid]: Monoid[ProgramF[A]] = new Monoid[ProgramF[A]] {
+    override def empty: ProgramF[A] = idF
+
+    override def combine(f: ProgramF[A], g: ProgramF[A]): ProgramF[A] = context => new Program[A] {
+      val terms: List[Term] = g(context).getProgram.termList ::: f(context).getProgram.termList
+      override def getProgram: TermAction[A] = TermAction(new Action[VirtualMachine[A]] {
+        override def run: VirtualMachineF[A] = g(context).getProgram.action.run compose f(context).getProgram.action.run
+      }, terms)
     }
+  }
 }
