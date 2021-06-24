@@ -57,8 +57,8 @@ object VirtualMachine {
 
 object Bootstrap {
 
-  import com.alvo.loggers.Logger._
-  import com.alvo.operations.CompositeOperations._
+  import com.alvo.loggers.Logger.{given, *}
+  import com.alvo.operations.CompositeOperations.{given, *}
 
   def main(args: Array[String]): Unit = {
 

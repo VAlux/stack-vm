@@ -14,31 +14,32 @@ object TermProgramIsomorphism:
   import com.alvo.operations.ArithmeticOperations.*
   import com.alvo.operations.StackOperations.*
 
-  private def buildHomomorphism[A: Monoid](code: List[Term])(using List[Term] => Program[A]): ProgramF[A] = Foldable[List].foldMap(code) {
-    case IF(predicate, body) => branch(predicate, body)(buildHomomorphism(predicate))(buildHomomorphism(body))
-    case REP(body) => rep(body)(buildHomomorphism(body))
-    case WHILE(predicate, body) => loop(predicate, body)(buildHomomorphism(predicate))(buildHomomorphism(body))
-    case PUT(value) => put(value)
-    case GET(index) => get(index)
-    case PUSH(value) => push(value)
-    case NOP => idF
-    case POP => pop
-    case DUP => dup
-    case SWAP => swap
-    case EXCH => exch
-    case INC => inc
-    case DEC => dec
-    case ADD => add
-    case MUL => mul
-    case SUB => sub
-    case DIV => div
-    case EQL => eqv
-    case LTH => lte
-    case GTH => gte
-    case NEQ => neq
-    case NEG => neg
-    case MOD => mod
-  }
+  private def buildHomomorphism[A: Monoid](code: List[Term])(using List[Term] => Program[A]): ProgramF[A] = 
+    Foldable[List].foldMap(code) {
+      case IF(predicate, body) => branch(predicate, body)(buildHomomorphism(predicate))(buildHomomorphism(body))
+      case REP(body) => rep(body)(buildHomomorphism(body))
+      case WHILE(predicate, body) => loop(predicate, body)(buildHomomorphism(predicate))(buildHomomorphism(body))
+      case PUT(value) => put(value)
+      case GET(index) => get(index)
+      case PUSH(value) => push(value)
+      case NOP => idF
+      case POP => pop
+      case DUP => dup
+      case SWAP => swap
+      case EXCH => exch
+      case INC => inc
+      case DEC => dec
+      case ADD => add
+      case MUL => mul
+      case SUB => sub
+      case DIV => div
+      case EQL => eqv
+      case LTH => lte
+      case GTH => gte
+      case NEQ => neq
+      case NEG => neg
+      case MOD => mod
+    }
 
   def fromCode[A: Monoid](code: List[Term])(using List[Term] => Program[A]): ProgramF[A] =
     buildHomomorphism[A](code)
