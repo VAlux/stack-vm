@@ -2,17 +2,16 @@ package com.alvo
 
 import cats.kernel.Monoid
 import com.alvo.VirtualMachine.{Memory, Processor, ProgramF, Stack}
-import com.alvo.code.Term
-import com.alvo.code.Terms.{NOP, TermList}
+import com.alvo.code.Terms.Term
+import com.alvo.code.Terms.Term.*
+import scala.language.implicitConversions
 
-
-trait Program[A] {
+trait Program[A]:
   def getProgram: TermAction[A]
-}
 
-case class TermAction[A](action: Action[VirtualMachine[A]], termList: TermList = NOP)
+case class TermAction[A](action: Action[VirtualMachine[A]], termList: List[Term] = NOP)
 
-object Program {
+object Program:
 
   type VirtualMachineF[A] = VirtualMachine[A] => VirtualMachine[A]
 
@@ -26,7 +25,7 @@ object Program {
 
   def idF[A: Monoid]: ProgramF[A] = _ => Program.id
 
-  def createProgramForStack[A: Monoid](terms: TermList)(program: Stack => Processor[A]): ProgramF[A] = context => new Program[A] {
+  def createProgramForStack[A: Monoid](terms: List[Term])(program: Stack => Processor[A]): ProgramF[A] = context => new Program[A] {
     override def getProgram: TermAction[A] = TermAction(new Action[VirtualMachine[A]] {
       override val run: VirtualMachineF[A] = vm => vm.status match {
         case Some(_) => vm
@@ -35,7 +34,7 @@ object Program {
     }, terms)
   }
 
-  def createProgramForMemory[A: Monoid](terms: TermList)(program: ProcessorF[A]): ProgramF[A] = context => new Program[A] {
+  def createProgramForMemory[A: Monoid](terms: List[Term])(program: ProcessorF[A]): ProgramF[A] = context => new Program[A] {
     override def getProgram: TermAction[A] = TermAction(new Action[VirtualMachine[A]] {
       override val run: VirtualMachineF[A] = vm => vm.status match {
         case Some(_) => vm
@@ -44,15 +43,14 @@ object Program {
     }, terms)
   }
 
-  def createIndexedProgram[A: Monoid](terms: TermList)(index: Int): ProcessorF[A] => ProgramF[A] = program => context => new Program[A] {
+  def createIndexedProgram[A: Monoid](terms: List[Term])(index: Int): ProcessorF[A] => ProgramF[A] = program => context => new Program[A] {
     override def getProgram: TermAction[A] = TermAction(new Action[VirtualMachine[A]] {
       override val run: VirtualMachineF[A] = vm => {
         if (index < 0 || index >= VirtualMachine.memorySize)
           VirtualMachine.error[A](s"index [$index] is out of bounds").apply(vm)
-        else vm.status match {
+        else vm.status match
           case Some(_) => vm
           case _ => (context.getProgram.action.run compose program(vm.stack, vm.memory)) (vm) // Status is empty -> we can continue
-        }
       }
     }, terms)
   }
@@ -67,4 +65,3 @@ object Program {
       }, terms)
     }
   }
-}

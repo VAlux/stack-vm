@@ -1,12 +1,12 @@
 package com.alvo
 
 import cats.kernel.Monoid
-import cats.syntax.monoid._
+import cats.syntax.monoid.*
 import com.alvo.Program.id
-import com.alvo.VirtualMachine._
-import com.alvo.code.Term
+import com.alvo.VirtualMachine.*
+import com.alvo.code.Terms.Term
+import com.alvo.code.Terms.Term.*
 import com.alvo.code.TermProgramIsomorphism.fromCode
-import com.alvo.code.Terms._
 
 case class VirtualMachine[A: Monoid](stack: Stack, memory: Memory, status: VMStatus, journal: A) {
   def setStack(newStack: Stack): VirtualMachine[A] = this.copy(stack = newStack)
@@ -41,7 +41,7 @@ object VirtualMachine {
 //  }
 
   def error[A: Monoid](message: String): Processor[A] = {
-    vm: VirtualMachine[A] => vm.setStatus(Some(s"Error: $message"))
+    (vm: VirtualMachine[A]) => vm.setStatus(Some(s"Error: $message"))
   }
 
   def memoryUpdate(memory: Memory, at: Int, value: Int): Memory = {
@@ -53,7 +53,6 @@ object VirtualMachine {
     def mkString: String =
       s"stack[: ${vm.stack mkString ":"}] | memory: [${vm.memory mkString " "}] | status: [${vm.status}]"
   }
-
 }
 
 object Bootstrap {
@@ -65,13 +64,13 @@ object Bootstrap {
 
     println("\nEvaluation started...")
 
-    type Debug = ((StackStateLog, MemoryStateLog), CodeLog)
+    type Debug = CodeLog
 
-    val resRange = execute(fromCode[StackStateLog](PUSH(2) :: PUSH(6) :: range[StackStateLog]))
+    val resRange = execute(fromCode[Debug](PUSH(2) :: PUSH(6) :: range[Debug]))
 
     val resGcd = execute(fromCode[StackStateLog](PUSH(6) :: PUSH(9) :: gcd[StackStateLog]))
 
-    val resFactIter = execute(fromCode[StackStateLog](PUSH(4) :: memFactIter[StackStateLog]))
+    val resFactIter = execute(fromCode[StackStateLog](PUSH(3) :: memFactIter[StackStateLog]))
 
     println("\nCalculating range")
     println(resRange.journal.reverse mkString "\n")

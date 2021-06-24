@@ -1,33 +1,30 @@
 package com.alvo.operations
 
 import cats.kernel.Monoid
-import cats.syntax.show._
+import cats.syntax.show.*
 import com.alvo.Program
 import com.alvo.VirtualMachine.{ProgramF, Stack, error}
-import com.alvo.code.Term
-import com.alvo.code.ShowTerm._
-import com.alvo.code.Terms._
+import com.alvo.code.Terms.Term
+import com.alvo.code.Terms.Term.{given, *}
+import scala.language.implicitConversions
 
-object ArithmeticOperations {
-
-  private[this] implicit val intToStack: Int => Stack = _ :: Nil
+object ArithmeticOperations:
+  given Conversion[Int, Stack] = _ :: Nil
 
   private def unary[A: Monoid](term: Term)(operation: Int => Stack): ProgramF[A] =
     Program.createProgramForStack[A](term) { stack =>
       vm =>
-        stack match {
+        stack match 
           case x :: xs => vm.setStack(operation(x) ++ xs)
           case _ => error(show"operation $term expected an argument").apply(vm)
-        }
     }
 
   private def binary[A: Monoid](term: Term)(operation: Int => Int => Stack): ProgramF[A] =
     Program.createProgramForStack[A](term) { stack =>
       vm =>
-        stack match {
+        stack match
           case x :: y :: xs => vm.setStack(operation(x)(y) ++ xs)
           case _ => error(show"operation $term expected 2 arguments").apply(vm)
-        }
     }
 
   def neg[A: Monoid]: ProgramF[A] = unary[A](ADD)(a => -a)
@@ -53,4 +50,5 @@ object ArithmeticOperations {
   def neq[A: Monoid]: ProgramF[A] = binary[A](NEQ)(a => b => if (a != b) 1 else 0)
 
   def mod[A: Monoid]: ProgramF[A] = binary[A](MOD)(a => b => b % a)
-}
+
+end ArithmeticOperations

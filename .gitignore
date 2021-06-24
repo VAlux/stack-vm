@@ -1,8 +1,13 @@
 .idea/
+.bloop/
+.bsp/
+.vscode/
+.metals/
 target/
 lib_managed/
 src_managed/
 project/boot/
+project/project/
 project/plugins/project/
 .cache
 .lib/
