@@ -8,18 +8,13 @@ import com.alvo.code.Terms.Term
 import com.alvo.code.Terms.Term.*
 import com.alvo.code.TermProgramIsomorphism.fromCode
 
-case class VirtualMachine[A: Monoid](stack: Stack, memory: Memory, status: VMStatus, journal: A) {
+case class VirtualMachine[A: Monoid](stack: Stack, memory: Memory, status: VMStatus, journal: A):
   def setStack(newStack: Stack): VirtualMachine[A] = this.copy(stack = newStack)
-
   def setMemory(newMemory: Memory): VirtualMachine[A] = this.copy(memory = newMemory)
-
   def setStatus(newStatus: VMStatus): VirtualMachine[A] = this.copy(status = newStatus)
-
   def addRecord(newRecord: A): VirtualMachine[A] = this.copy(journal = newRecord |+| journal)
-}
 
-object VirtualMachine {
-
+object VirtualMachine:
   type Stack = List[Int]
   type Memory = Array[Int]
   type Processor[A] = VirtualMachine[A] => VirtualMachine[A]
@@ -49,19 +44,17 @@ object VirtualMachine {
     memory
   }
 
-  implicit class VirtualMachineSyntax(val vm: VirtualMachine[_]) extends AnyVal {
+  extension (vm: VirtualMachine[_])
     def mkString: String =
       s"stack[: ${vm.stack mkString ":"}] | memory: [${vm.memory mkString " "}] | status: [${vm.status}]"
-  }
-}
 
-object Bootstrap {
+end VirtualMachine
 
+object Bootstrap:
   import com.alvo.loggers.Logger.{given, *}
   import com.alvo.operations.CompositeOperations.{given, *}
 
-  def main(args: Array[String]): Unit = {
-
+  @main def entrypoint(args: String*): Unit =
     println("\nEvaluation started...")
 
     type Debug = CodeLog
@@ -82,5 +75,3 @@ object Bootstrap {
     println(resGcd.journal.reverse mkString "\n")
 
     println("\nEvaluation finished. VM terminated")
-  }
-}
