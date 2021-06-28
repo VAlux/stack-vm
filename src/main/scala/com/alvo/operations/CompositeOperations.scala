@@ -1,8 +1,8 @@
 package com.alvo.operations
 
 import cats.kernel.Monoid
-import com.alvo.code.Terms.Term
-import com.alvo.code.Terms.Term.*
+import com.alvo.code.Term
+import com.alvo.code.Term.*
 
 object CompositeOperations {
 

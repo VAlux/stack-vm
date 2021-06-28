@@ -9,8 +9,8 @@ object TermProgramIsomorphism:
   import cats.kernel.Monoid
   import com.alvo.Program.idF
   import com.alvo.VirtualMachine.ProgramF
-  import com.alvo.code.Terms.Term
-  import com.alvo.code.Terms.Term.*
+  import com.alvo.code.Term
+  import com.alvo.code.Term.*
   import com.alvo.operations.ArithmeticOperations.*
   import com.alvo.operations.StackOperations.*
 

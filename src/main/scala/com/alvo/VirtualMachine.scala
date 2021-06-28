@@ -4,8 +4,8 @@ import cats.kernel.Monoid
 import cats.syntax.monoid.*
 import com.alvo.Program.id
 import com.alvo.VirtualMachine.*
-import com.alvo.code.Terms.Term
-import com.alvo.code.Terms.Term.*
+import com.alvo.code.Term
+import com.alvo.code.Term.*
 import com.alvo.code.TermProgramIsomorphism.fromCode
 
 case class VirtualMachine[A: Monoid](stack: Stack, memory: Memory, status: VMStatus, journal: A):
@@ -35,9 +35,8 @@ object VirtualMachine:
 //    run[A](program(context)).apply(emptyVM)
 //  }
 
-  def error[A: Monoid](message: String): Processor[A] = {
+  def error[A: Monoid](message: String): Processor[A] = 
     (vm: VirtualMachine[A]) => vm.setStatus(Some(s"Error: $message"))
-  }
 
   def memoryUpdate(memory: Memory, at: Int, value: Int): Memory = {
     memory.update(at, value)
@@ -57,21 +56,23 @@ object Bootstrap:
   @main def entrypoint(args: String*): Unit =
     println("\nEvaluation started...")
 
-    type Debug = CodeLog
-
-    val resRange = execute(fromCode[Debug](PUSH(2) :: PUSH(6) :: range[Debug]))
-
+    val resRange = execute(fromCode[CodeLog](PUSH(2) :: PUSH(6) :: range[CodeLog]))
     val resGcd = execute(fromCode[StackStateLog](PUSH(6) :: PUSH(9) :: gcd[StackStateLog]))
-
     val resFactIter = execute(fromCode[StackStateLog](PUSH(3) :: memFactIter[StackStateLog]))
 
     println("\nCalculating range")
     println(resRange.journal.reverse mkString "\n")
+    println("\nResulting stack")
+    println(resRange.stack)
 
     println("\nCalculating factorial hom")
     println(resFactIter.journal.reverse mkString "\n")
+    println("\nResulting stack")
+    println(resFactIter.stack)
 
     println("\nCalculating GCD")
     println(resGcd.journal.reverse mkString "\n")
+    println("\nResulting stack")
+    println(resGcd.stack)
 
     println("\nEvaluation finished. VM terminated")

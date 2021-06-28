@@ -3,13 +3,14 @@ package com.alvo.operations
 import cats.kernel.{Monoid, Semigroup}
 import com.alvo.Program.idF
 import com.alvo.VirtualMachine.{Processor, ProgramF, Stack, error, memoryUpdate}
-import com.alvo.code.Terms.Term
-import com.alvo.code.Terms.Term.*
+import com.alvo.code.Term
+import com.alvo.code.Term.*
 import com.alvo.{Program, VirtualMachine}
 import scala.language.implicitConversions
 import scala.annotation.tailrec
 
 object StackOperations:
+
   def pop[A: Monoid]: ProgramF[A] = Program.createProgramForStack(POP) { stack =>
     vm =>
       stack match

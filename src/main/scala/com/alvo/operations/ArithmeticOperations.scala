@@ -4,8 +4,8 @@ import cats.kernel.Monoid
 import cats.syntax.show.*
 import com.alvo.Program
 import com.alvo.VirtualMachine.{ProgramF, Stack, error}
-import com.alvo.code.Terms.Term
-import com.alvo.code.Terms.Term.{given, *}
+import com.alvo.code.Term
+import com.alvo.code.Term.{given, *}
 import scala.language.implicitConversions
 
 object ArithmeticOperations:
