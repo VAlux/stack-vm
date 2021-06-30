@@ -2,6 +2,7 @@ ThisBuild / scalaVersion := "3.0.0"
 ThisBuild / version := "0.1.0-SNAPSHOT"
 ThisBuild / organization := "com.alvo"
 ThisBuild / organizationName := "alvo"
+ThisBuild / scalafmtOnCompile := true
 
 lazy val root = project
   .in(file("."))
@@ -9,7 +10,8 @@ lazy val root = project
     name := "stack-vm",
     libraryDependencies ++= Seq(
       "org.scalatest" %% "scalatest" % "3.2.9" % "test",
-      "org.typelevel" %% "cats-core" % "2.6.1"
+      "org.typelevel" %% "cats-core" % "2.6.1",
+      "org.typelevel" %% "cats-effect" % "3.1.1"
     )
   )
 

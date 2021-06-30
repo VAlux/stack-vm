@@ -12,19 +12,17 @@ object ArithmeticOperations:
   given Conversion[Int, Stack] = _ :: Nil
 
   private def unary[A: Monoid](term: Term)(operation: Int => Stack): ProgramF[A] =
-    Program.createProgramForStack[A](term) { stack =>
-      vm =>
-        stack match 
-          case x :: xs => vm.setStack(operation(x) ++ xs)
-          case _ => error(show"operation $term expected an argument").apply(vm)
+    Program.createProgramForStack[A](term) { stack => vm =>
+      stack match
+        case x :: xs => vm.setStack(operation(x) ++ xs)
+        case _       => error(show"operation $term expected an argument").apply(vm)
     }
 
   private def binary[A: Monoid](term: Term)(operation: Int => Int => Stack): ProgramF[A] =
-    Program.createProgramForStack[A](term) { stack =>
-      vm =>
-        stack match
-          case x :: y :: xs => vm.setStack(operation(x)(y) ++ xs)
-          case _ => error(show"operation $term expected 2 arguments").apply(vm)
+    Program.createProgramForStack[A](term) { stack => vm =>
+      stack match
+        case x :: y :: xs => vm.setStack(operation(x)(y) ++ xs)
+        case _            => error(show"operation $term expected 2 arguments").apply(vm)
     }
 
   def neg[A: Monoid]: ProgramF[A] = unary[A](ADD)(a => -a)
