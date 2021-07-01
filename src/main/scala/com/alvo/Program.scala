@@ -11,51 +11,6 @@ trait Program[A]:
 
 case class TermAction[A](termList: List[Term] = NOP, action: Action[VirtualMachine[A]])
 
-enum ProcessorF[A]:
-  case SProcessor(run: Stack => Processor[A])
-  case SMProcessor(run: (Stack, Memory) => Processor[A])
-
-sealed trait ProgramBuilder[A, Proc <: ProcessorF[A]]:
-  def apply(terms: List[Term], processor: Proc, program: Program[A]): Program[A]
-
-object ProgramBuilder:
-  import ProcessorF.*
-
-  extension [A](action: Action[VirtualMachine[A]])
-    def asTermAction(terms: List[Term]): TermAction[A] = TermAction(terms, action)
-
-  class StackProgramBuilder[A] extends ProgramBuilder[A, SProcessor[A]]:
-    override def apply(terms: List[Term], processor: SProcessor[A], program: Program[A]) = new Program[A]:
-      override def getProgram = new Action[VirtualMachine[A]] {
-        override val run: Processor[A] = vm =>
-          vm.status match
-            case Some(_) => vm
-            case _       => (program.getProgram.action.run compose processor.run(vm.stack))(vm)
-      }.asTermAction(terms)
-
-  class MemoryProgramBuilder[A] extends ProgramBuilder[A, SMProcessor[A]]:
-    override def apply(terms: List[Term], processor: SMProcessor[A], program: Program[A]) = new Program[A]:
-      override def getProgram = new Action[VirtualMachine[A]] {
-        override val run: Processor[A] = vm =>
-          vm.status match
-            case Some(_) => vm
-            case _       => (program.getProgram.action.run compose processor.run(vm.stack, vm.memory))(vm)
-      }.asTermAction(terms)
-
-  class IndexedMemoryProgramBuilder[A: Monoid](index: Int) extends ProgramBuilder[A, SMProcessor[A]]:
-    override def apply(terms: List[Term], processor: SMProcessor[A], program: Program[A]) = new Program[A]:
-      override def getProgram = new Action[VirtualMachine[A]] {
-        override val run: Processor[A] = vm =>
-          if (index < 0 || index >= VirtualMachine.memorySize)
-            VirtualMachine.error[A](s"index [$index] is out of bounds").apply(vm)
-          else
-            vm.status match
-              case Some(_) => vm
-              case _       => (program.getProgram.action.run compose processor.run(vm.stack, vm.memory))(vm)
-      }.asTermAction(terms)
-
-end ProgramBuilder
-
 object Program:
 
   type SProcessor[A] = Stack => Processor[A]
