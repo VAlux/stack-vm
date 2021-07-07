@@ -22,7 +22,7 @@ object VirtualMachineAlg:
   def apply[F[_], J: Monoid](
     vm: VirtualMachineTF[F, J]
   )(using F: Sync[F]): F[VirtualMachineAlg[F, J, VirtualMachineTF]] = F.delay {
-    new VirtualMachineAlg[F, J, VirtualMachineTF]:
+    new:
       override def setStack(newStack: Stack): F[VirtualMachineTF[F, J]] =
         vm.stack.update(_ => newStack).map(_ => vm)
       override def setMemory(newMemory: Memory): F[VirtualMachineTF[F, J]] =
