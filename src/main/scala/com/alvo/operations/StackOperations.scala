@@ -10,6 +10,9 @@ import scala.language.implicitConversions
 import scala.annotation.tailrec
 
 object StackOperations:
+  import cats.effect.kernel.Sync
+
+  def popTf[F[_], J: Monoid](using F: Sync[F]) = ???
 
   def pop[A: Monoid]: ProgramF[A] = Program.createProgramForStack(POP) { stack => vm =>
     stack match

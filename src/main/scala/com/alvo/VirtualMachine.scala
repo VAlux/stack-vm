@@ -10,46 +10,6 @@ import com.alvo.code.TermProgramIsomorphism.fromCode
 import cats.effect.kernel.Sync
 import cats.effect.kernel.Ref
 
-trait VirtualMachineAlg[F[_], J, VM[F[_], J]]:
-  def setStack(newStack: Stack): F[VM[F, J]]
-  def setMemory(newMemory: Memory): F[VM[F, J]]
-  def setStatus(newStatus: VMStatus): F[VM[F, J]]
-  def addRecord(newRecord: J): F[VM[F, J]]
-
-object VirtualMachineAlg:
-  import cats.implicits.given
-
-  def apply[F[_], J: Monoid](
-    vm: VirtualMachineTF[F, J]
-  )(using F: Sync[F]): F[VirtualMachineAlg[F, J, VirtualMachineTF]] = F.delay {
-    new:
-      override def setStack(newStack: Stack): F[VirtualMachineTF[F, J]] =
-        vm.stack.update(_ => newStack).map(_ => vm)
-      override def setMemory(newMemory: Memory): F[VirtualMachineTF[F, J]] =
-        vm.memory.update(_ => newMemory).map(_ => vm)
-      override def setStatus(newStatus: VMStatus): F[VirtualMachineTF[F, J]] =
-        vm.status.update(_ => newStatus).map(_ => vm)
-      override def addRecord(newRecord: J): F[VirtualMachineTF[F, J]] =
-        vm.journal.update(currentJournal => newRecord |+| currentJournal).map(_ => vm)
-  }
-
-  def empty[F[_]: Sync, J: Monoid]: F[VirtualMachineAlg[F, J, VirtualMachineTF]] = for {
-    stack <- Ref.of[F, Stack](List.empty)
-    mem <- Ref.of[F, Memory](Array.fill(memorySize)(0))
-    status <- Ref.of[F, VMStatus](None)
-    journal <- Ref.of[F, J](Monoid.empty)
-    vm <- VirtualMachineAlg(VirtualMachineTF(stack, mem, status, journal))
-  } yield vm
-
-end VirtualMachineAlg
-
-case class VirtualMachineTF[F[_], J: Monoid](
-  stack: Ref[F, Stack],
-  memory: Ref[F, Memory],
-  status: Ref[F, VMStatus],
-  journal: Ref[F, J]
-)
-
 case class VirtualMachine[A: Monoid](stack: Stack, memory: Memory, status: VMStatus, journal: A):
   def setStack(newStack: Stack): VirtualMachine[A] = this.copy(stack = newStack)
   def setMemory(newMemory: Memory): VirtualMachine[A] = this.copy(memory = newMemory)
